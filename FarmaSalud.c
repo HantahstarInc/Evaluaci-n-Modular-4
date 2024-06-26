@@ -335,13 +335,6 @@ struct RaizCatalogos *getPadre(struct RaizCatalogos *arbol, struct RaizCatalogos
     }
     return nodoAntecesor;
 }
-//funcion retorna el unico hijo no nulo de un nodo en un arbol binario de busqueda
-struct RaizCatalogos *hijoNoNull(struct RaizCatalogos *nodoAEliminar){
-    if(nodoAEliminar->izq != NULL)
-        return nodoAEliminar->izq;
-    else
-        return nodoAEliminar->der;
-}
 //funcion para eliminar un "nodo" en el arbol binario de busqueda, viendo los diferentes casos
 int eliminarProductoDelCatalogo(struct RaizCatalogos **arbol, char *codigoProducto) {
 
@@ -468,7 +461,6 @@ int agregarTipoMedaLista(struct NodoInventario **headinventario, struct TipoMed 
             rec->sig->DatosMed = tiponuevo;
             rec->sig->sig = NULL;
             rec->sig->ant = rec;
-            //free(rec);
             return 1;
         }
     }
@@ -489,6 +481,7 @@ int eliminarTipomed(struct NodoInventario **headinventario, char *codigoProducto
         if (*headinventario != NULL) {
             (*headinventario)->ant = NULL;
         }
+        return 1;
     }
     while (current != NULL) {
         if(current->DatosMed->Datosprod->codigo != NULL && (strcmp(current->DatosMed->Datosprod->codigo,codigoProducto)==0))
@@ -619,6 +612,7 @@ struct Proveedor * crearProveedor(char *nombreProveedor, char* ubicacion , unsig
     strcpy(ProveedorNuevo -> nombre,(nombreProveedor));
     strcpy(ProveedorNuevo -> ubicacion,(ubicacion));
     ProveedorNuevo -> cuota = cuota;
+    ProveedorNuevo -> Mercancia = NULL;
 
 
     return ProveedorNuevo;
@@ -705,9 +699,6 @@ int eliminarProveedor(struct NodoProveedores **headProveedores,char *nombre)
                 {
                     rec->sig->ant=rec->ant;
                     rec->ant->sig=rec->sig;
-
-
-                    /*ahora borramos*/
                     temp=rec->sig;
                     free(rec);
                     rec=temp;
@@ -746,7 +737,6 @@ int agregarProductoCatalogoProveedor(char *codigoNuevoProducto, struct RaizCatal
 struct Producto *buscarMedicamentoPorCodigo(struct NodoInventario *headInventario,char *codigo)
 {
     struct NodoInventario *rec = headInventario;
-    int i;
     while(rec!=NULL)
     {
         if(rec->DatosMed->Datosprod->codigo != NULL && strcmp(rec->DatosMed->Datosprod->codigo,codigo) == 0)
@@ -854,27 +844,26 @@ int eliminarBoleta(struct NodoBoleta ** headBoletas,char *rut,char*fecha)
         return -2;
     }
 
-    if (estaCaducado(fecha,(*headBoletas)->boletas->fecha) == 0 && strcmp((*headBoletas)->boletas->rut ,rut) == 0)
-    {
-        (*headBoletas) = (*headBoletas)->sig;
-        if ((*headBoletas)!=NULL){
-            (*headBoletas) -> ant = NULL;
-        }
-        return 1;
-    }
-
     current = *headBoletas;
     while (current!= NULL)
     {
         if (estaCaducado(fecha,current->boletas->fecha) == 0 && (strcmp(current->boletas->rut,rut)==0))
         {
-            if (current->ant != NULL) {
+            if (current->ant != NULL&&current->sig!=NULL) {
                 current->ant->sig = current->sig;
-            }
-            if (current->sig != NULL) {
                 current->sig->ant = current->ant;
+                cont++;
+
             }
-            cont++;
+            else{
+                (*headBoletas) = (*headBoletas)->sig;
+                if ((*headBoletas)!=NULL){
+                    (*headBoletas) -> ant = NULL;
+                }
+                cont++;
+                
+
+            }
         }
         current = current->sig;
     }
@@ -914,16 +903,11 @@ long buscarBoleta(struct NodoBoleta *headboleta,char *fecha,char *rut) {
 int verificarStockParaCompras(struct Medicamento **medicamentos,char*fecha,int tamanio)
 {
     int cont = 0 , i;
-
-    if(tamanio == 0)
-    {
+    if(tamanio == 0){
         return 0;
     }
-
-    for(i = 0 ; i < tamanio ; i++)
-    {
-        if(medicamentos[i] != NULL && estaCaducado(fecha,medicamentos[i]->fechacaducidad)<0)
-        {
+    for(i = 0 ; i < tamanio ; i++){
+        if(medicamentos[i] != NULL && estaCaducado(fecha,medicamentos[i]->fechacaducidad)<0){
             cont++;
         }
     }
@@ -935,7 +919,7 @@ unsigned long sumatoriaDeStockFarmacia(struct NodoFarmacias *sucursal){
     struct NodoInventario *rec;
     rec = sucursal->DatosFarmacias->headInventario;
     while(rec!=NULL){
-        suma = rec->DatosMed->stock;
+        suma += rec->DatosMed->stock;
         rec = rec->sig;
     }
     return suma;
@@ -1066,6 +1050,9 @@ void mostrarProveedoresQuesirven(struct NodoProveedores *headProveedores,char *c
     if (cont==0){
         printf("\nNo hay proveedores que distribuyan este tipo de producto\n");
     }
+    else{
+        printf("\nEstas son los proveedores que te sirven en ese caso\n\n");
+    }
 }
 //funcion que te propisiona los proveedores con el medicamento que estas pidiendo
 int buscarProveedorQuesirve(struct NodoProveedores *headProveedores,char *nombre, char *codigo){
@@ -1116,17 +1103,18 @@ void agregarMedicamentos(struct NodoProveedores **prove,struct NodoInventario **
     long i;
     long maximorecorrer = (long)(((*tipomed)->DatosMed->stock)+cantidad);
     struct Proveedor *proveedormedicamento= (*prove)->DatosProveedor;
-
-
     struct Medicamento **aux = (struct Medicamento **)realloc((*tipomed)->DatosMed->medicamentos, maximorecorrer * sizeof(struct Medicamento *));
+
     if (aux == NULL) {
         printf("Error al reasignar memoria\n");
+        return;
     }
     (*tipomed)->DatosMed->medicamentos=aux;
     for (i = (long)((*tipomed)->DatosMed->stock); i < maximorecorrer; i++) {
         (*tipomed)->DatosMed->medicamentos[i] = (struct Medicamento *)malloc(sizeof(struct Medicamento));
         if ((*tipomed)->DatosMed->medicamentos[i] == NULL) {
             printf( "Error al asignar memoria para medicamento\n");
+            return;
         }
         (*tipomed)->DatosMed ->medicamentos[i] ->fechacaducidad = (char*) malloc(strlen(fecha) + 1);
         strcpy((*tipomed)->DatosMed->medicamentos[i]->fechacaducidad,(fecha));
@@ -1393,7 +1381,7 @@ void menuVentaYRegistro(struct Farmacias **Farmacia) {
 
     do {
         puts("=============================================");
-        printf("\n   Menu realizar venta en sucursal %s \n", (*Farmacia)->ubicacion);
+        printf("   Menu realizar venta en sucursal %s \n", (*Farmacia)->ubicacion);
         puts("=============================================");
         puts("(1) Realizar la compra de un/los medicamento/s");
         puts("(2) Volver");
@@ -1428,7 +1416,7 @@ void menuVentaYRegistro(struct Farmacias **Farmacia) {
                     break;
 
                 }else if(verificarCantProductosEnFecha < cantProductosVenta){
-                    printf("La cantidad de productos ingresados en fecha %s es mayor a la cantidad de productos disponibles",fecha);
+                    printf("La cantidad de productos ingresados en fecha %s es mayor a la cantidad de productos disponibles\n",fecha);
                     break;
                 }
                 else
@@ -1613,12 +1601,11 @@ void menuVentaYRegistro(struct Farmacias **Farmacia) {
                             (*Farmacia)->venta++;
                             printf("Se Agrego la boleta de %s correctamente\n", boletaVenta->rut);
                             printf("La sucursal %s gano %li$ por la compra",(*Farmacia)->ubicacion,montoVenta);
+                            (*Farmacia)->presupuesto += (long)montoVenta;
                         } else {
                             puts("No se pudo agregar la boleta al sistema");
                             free(boletaVenta);
                         }
-                        (*Farmacia)->presupuesto += (long)montoVenta;
-
                         opcion = 2;
                     }
                 }
@@ -1695,10 +1682,14 @@ void menuCatalogo(struct FarmaSalud **farma){
                     puts("Producto nuevo añadido con exito al catalogo\n");
                 }
                 else{
-                    puts("\nNo se pudo agregar el catalogo\n");
+                    puts("\nProducto ya se encuentra en el catalogo\n");
                 }
                 break;
             case 2:
+                if ((*farma)->AbbCatalogos==NULL){
+                    printf("\nNo hay ningun producto en el catalogo, agregue uno primero\n\n");
+                    break;
+                }
                 printf("Ingresa el codigo del producto que deseas buscar: ");
                 scanf(" %[^\n]", codigo);
                 if (strlen(codigo)>10||strlen(codigo)<10){
@@ -1716,6 +1707,10 @@ void menuCatalogo(struct FarmaSalud **farma){
                 }
                 break;
             case 3:
+                if ((*farma)->AbbCatalogos==NULL){
+                    printf("\nNo hay ningun producto en el catalogo, agregue uno primero\n\n");
+                    break;
+                }
                 printf("Ingresa el codigo del producto que deseas eliminar: ");
                 scanf(" %[^\n]", codigo);
                 if (strlen(codigo)>10||strlen(codigo)<10)
@@ -1827,7 +1822,7 @@ void menuInventario(struct NodoFarmacias **farmacias,struct FarmaSalud *farma){
                     printf("\nTipo de medicamento %s agregado exitosamente.\n",tipomednuevo->Datosprod->nombre);
                 }
                 else{
-                    printf("\nNo se pudo agregar %s en el sistema\n",codigo);
+                    printf("\nEl producto ya fue agregado anteriormente en la sucursal %s\n",(*farmacias)->DatosFarmacias->ubicacion);
                     free(tipomednuevo);
                 }
                 break;
@@ -1957,13 +1952,14 @@ void menuBoletas(struct NodoBoleta **headBoleta,char *ubicacionSucursal)
     long verificarBoleta;
     char rut[MAX];
     char fecha[MAX];
+    long maximodeveces,i;
     do{
         printf("\n=============================================\n");
         printf("Menu Boletas de sucursal : %s\n",ubicacionSucursal);
         printf("=============================================\n\n");
         printf("(1) Eliminar boleta/s de la sucursal %s\n",ubicacionSucursal);
         printf("(2) Mostrar boletas de la sucurusal %s\n",ubicacionSucursal);
-        printf("(3) Mostrar boleta/s de un unico cliente en una fecha\n");
+        printf("(3) Buscar boleta/s de un unico cliente en una fecha\n");
         puts("(4) Volver");
         printf("Seleccione una opcion: ");
         scanf("%d", &opcion);
@@ -1979,7 +1975,7 @@ void menuBoletas(struct NodoBoleta **headBoleta,char *ubicacionSucursal)
                     printf("Formato no permitido, intente de nuevo.\n\n");
                     break;
                 }
-
+               
                 verificar = eliminarBoleta(&(*headBoleta),rut,fecha);
                 if(verificar == 1)
                 {
@@ -2000,7 +1996,7 @@ void menuBoletas(struct NodoBoleta **headBoleta,char *ubicacionSucursal)
                 scanf(" %[^\n]",rut);
                 printf("Ingrese la fecha de la compra (formato DD/MM/AAAA): \n");
                 scanf(" %[^\n]", fecha);
-                if ((strlen(fecha)!=10||(fecha[2]!='/'&&fecha[5]!='/'))){
+                if ((strlen(fecha)!=10||(fecha[2]!='/'&&fecha[5]!='/'))) {
                     printf("Formato no permitido, intente de nuevo.\n\n");
                     break;
                 }
@@ -2226,7 +2222,7 @@ void menuConfirmarOrden(struct NodoProveedores **prove,struct NodoFarmacias **su
     int opcion;
     int lote;
     char fechacaducidad[MAX];
-    long presupuestopost = ((*sucursal)->DatosFarmacias->presupuesto)-precio;
+    long presupuestopost = ((*sucursal)->DatosFarmacias->presupuesto)-(long)precio;
     do{
         puts("\n=============================================");
         printf("Orden para sucursal %s de %li %s para el proveedor %s\n",(*sucursal)->DatosFarmacias->ubicacion,cantidad,(*tipomed)->DatosMed->Datosprod->nombre,(*prove)->DatosProveedor->nombre);
@@ -2251,7 +2247,7 @@ void menuConfirmarOrden(struct NodoProveedores **prove,struct NodoFarmacias **su
                     break;
                 }
                 agregarMedicamentos(&(*prove),&(*tipomed),cantidad,fechacaducidad,lote);
-                (*sucursal)->DatosFarmacias->presupuesto -= precio;
+                (*sucursal)->DatosFarmacias->presupuesto -= (long)precio;
                 printf("Orden hecha con exito!\n");
                 opcion = 2;
                 break;
@@ -2296,7 +2292,8 @@ void menuRealizarOrden(struct NodoProveedores **prove,struct NodoFarmacias **suc
                     printf("La orden no se puede efectuar, dado que la cantidad tiene que ser mayor a cero\n");
                 }
                 else{
-                    precioacobrar = (unsigned long)(((preciobase)*0.4)*cantidad)+(*prove)->DatosProveedor->cuota; //esto es para que la farmacia tenga ganancia por si acaso profe xd
+                    //esto es para que la farmacia tenga ganancia por si acaso profe
+                    precioacobrar = (unsigned long)(((preciobase)*0.4)*cantidad)+(*prove)->DatosProveedor->cuota; 
                     if ((cantidad+sumatoria)>((*sucursal)->DatosFarmacias->capacidadInventario)){
                         restante = ((*sucursal)->DatosFarmacias->capacidadInventario) - (sumatoria);
                         printf("La orden no se puede efectuar, dado que la capacidad del inventario no lo aguanta");
@@ -2363,9 +2360,8 @@ void menuOrden(struct FarmaSalud **farma,struct NodoFarmacias **sucursal){
                         printf("\nNo hay proveedores que distribuyan ese medicamento\n\n");
                     }
                     else{
-                        printf("\nEstas son los proveedores que te sirven en ese caso\n\n");
                         mostrarProveedoresQuesirven((*farma)->headProveedores,codigo);
-                        puts("\nElija uno de estos proveedores por nombre (si no hay, aprete cualquier boton): ");
+                        puts("\nElija uno de estos proveedores por nombre (si no hay, ingrese lo que sea): ");
                         scanf(" %[^\n]", nombre);
                         verificar = buscarProveedorQuesirve((*farma)->headProveedores,nombre,codigo);
                         if (verificar==1){
@@ -2435,14 +2431,14 @@ void menuOrdenFarmacia(struct FarmaSalud **farma) {
     } while (opcion != 2);
 }
 //funcion menu para darle catalogo a los proveedores
-void menuCatalogoProveedores(struct NodoProveedores **headProvedores,struct FarmaSalud **farma){
+void menuCatalogoProveedores(struct NodoProveedores **Provedor,struct FarmaSalud **farma){
     int opcion;
     char codigo[MAX];
     struct RaizCatalogos *ptr;
     int verificar;
     do{
         puts("=============================================");
-        printf("Catalogo de Productos que distribuye el Proveedor %s\n",(*headProvedores)->DatosProveedor->nombre);
+        printf("Catalogo de Productos que distribuye el Proveedor %s\n",(*Provedor)->DatosProveedor->nombre);
         puts("=============================================\n");
         puts("(1) Agregar Producto");
         puts("(2) Buscar Producto");
@@ -2467,7 +2463,7 @@ void menuCatalogoProveedores(struct NodoProveedores **headProvedores,struct Farm
                 }
                 else{
                     printf("El producto se encuentra en el catalogo de la farmacia\n");
-                    verificar = agregarProductoCatalogoProveedor(codigo,&(*headProvedores)->DatosProveedor->Mercancia,ptr);
+                    verificar = agregarProductoCatalogoProveedor(codigo,&(*Provedor)->DatosProveedor->Mercancia,ptr);
                     if (verificar==1){
                         printf("El producto %s fue agregado con exito al catalogo de los proveedores\n\n",ptr->DatosProductos->nombre);
                     }
@@ -2478,6 +2474,10 @@ void menuCatalogoProveedores(struct NodoProveedores **headProvedores,struct Farm
                 }
                 break;
             case 2:
+                if ((*Provedor)->DatosProveedor->Mercancia==NULL){
+                    printf("El proveedor %s aun no comparte ningun producto con FarmaSalud, agregue uno primero\n",(*Provedor)->DatosProveedor->nombre);
+                    break;
+                }
                 printf("Ingrese el codigo del producto que desea \n");
                 printf("buscar en el catalogo de los proveedores :");
                 scanf(" %[^\n]", codigo);
@@ -2485,7 +2485,7 @@ void menuCatalogoProveedores(struct NodoProveedores **headProvedores,struct Farm
                     printf("Formato no permitido, intente de nuevo.\n\n");
                     break;
                 }
-                ptr = buscarProductoEnCatalogo((*headProvedores) ->DatosProveedor -> Mercancia,codigo);
+                ptr = buscarProductoEnCatalogo((*Provedor) ->DatosProveedor -> Mercancia,codigo);
                 if (ptr!=NULL){
                     printf("\nEl producto %s se encuentra en el catalogo del proveedor\n",ptr->DatosProductos->nombre);
                     mostrarProductoCatalogo(ptr);
@@ -2497,14 +2497,18 @@ void menuCatalogoProveedores(struct NodoProveedores **headProvedores,struct Farm
 
                 break;
             case 3:
-                printf("Ingrese el codigo del producto que \n");
+                if((*Provedor)->DatosProveedor->Mercancia==NULL) {
+                    printf("El proveedor %s aun no comparte ningun producto con FarmaSalud, agregue uno primero\n",(*Provedor)->DatosProveedor->nombre);
+                    break;
+                }
+                printf("Ingrese el codigo del producto que \n"); 
                 printf("desea borrar del catalogo de los proveedores : ");
                 scanf(" %[^\n]", codigo);
                 if (strlen(codigo)>10||strlen(codigo)<10){
                     printf("Formato no permitido, intente de nuevo.\n\n");
                     break;
                 }
-                verificar = eliminarProductoDelCatalogo(&((*headProvedores)->DatosProveedor->Mercancia),codigo);
+                verificar = eliminarProductoDelCatalogo(&((*Provedor)->DatosProveedor->Mercancia),codigo);
                 if (verificar==1){
                     printf("El producto fue exitosamente eliminado del catalogo del proveedor\n");
                 }
@@ -2519,11 +2523,11 @@ void menuCatalogoProveedores(struct NodoProveedores **headProvedores,struct Farm
                 }
                 break;
             case 4:
-                if((*headProvedores)->DatosProveedor->Mercancia==NULL){
-                    printf("Actualmente el proveedor %s no comparte ningun producto con FarmaSalud\n",(*headProvedores)->DatosProveedor->nombre);
+                if((*Provedor)->DatosProveedor->Mercancia==NULL){
+                    printf("Actualmente el proveedor %s no comparte ningun producto con FarmaSalud\n",(*Provedor)->DatosProveedor->nombre);
                 }
                 else{
-                    mostrarNodoCatalogo((*headProvedores)->DatosProveedor->Mercancia);
+                    mostrarNodoCatalogo((*Provedor)->DatosProveedor->Mercancia);
                 }
 
                 break;
@@ -2617,6 +2621,10 @@ void menuProveedores(struct FarmaSalud **farma) {
                 }
                 break;
             case 2:
+                if ((*farma)->headProveedores==NULL){
+                    printf("\nAun no hay proveedores en el sistema, agregue uno primero\n\n");
+                    break;
+                }
                 printf("Ingrese nombre del proveedor a buscar: ");
                 scanf(" %[^\n]", nombre);
                 aux = buscarProveedores((*farma)-> headProveedores , nombre);
@@ -2630,6 +2638,11 @@ void menuProveedores(struct FarmaSalud **farma) {
                 }
                 break;
             case 3:
+                if ((*farma)->headProveedores==NULL){
+                    printf("\nAun no hay proveedores en el sistema, agregue uno primero\n\n");
+                    break;
+                }
+                
                 printf("Ingrese nombre del proveedor a eliminar: ");
                 scanf(" %[^\n]", nombre);
 
