@@ -1301,7 +1301,7 @@ long sumatoriaDeEstacion(struct NodoBoleta *headboleta,char *fechainf,char *fech
         while(rec!=NULL){
             if (estaEnEstacion(rec->boletas->fecha, fechainf, fechasup)==1){
                 for (i=0;i<(rec->boletas->tamanio);i++){
-                    if (rec->boletas->medicamentosVenta[i]->Datosprod->codigo==pivote->DatosMed->Datosprod->codigo){
+                    if (strcmp(rec->boletas->medicamentosVenta[i]->Datosprod->codigo,pivote->DatosMed->Datosprod->codigo)==0){
                         cont+=rec->boletas->medicamentosVenta[i]->stock;
                     }
                 }
